@@ -63,18 +63,24 @@ const router = createRouter({
           meta: { role: 1, title: '班级管理' } 
         },
 
-        // === 教师路由 (后续由成员B完善) ===
+        // ========== 教师端路由 ==========
         { 
-          path: 'teacher', 
-          component: TeacherHome, 
-          meta: { role: 2 } 
+          path: 'teacher',   // 默认跳转到工作台
+          name: 'TeacherDashboard',
+          component: () => import('../views/teacher/TeacherHome.vue'), 
+          meta: { role: 2, title: '教师工作台' } 
         },
-        
-        // === 学生路由 (后续由成员C/D完善) ===
-        { 
-          path: 'student', 
-          component: StudentHome, 
-          meta: { role: 3 } 
+        {
+          path: 'teacher/qa', // 答疑中心
+          name: 'TeacherQA',
+          component: () => import('../views/teacher/QuestionList.vue'),
+          meta: { role: 2, title: '答疑中心' }
+        },
+        {
+          path: 'teacher/publish', // 资源发布
+          name: 'TeacherPublish',
+          component: () => import('../views/teacher/ResourcePublish.vue'),
+          meta: { role: 2, title: '资源发布' }
         },
       ]
     }

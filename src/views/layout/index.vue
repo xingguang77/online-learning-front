@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted ,watch} from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { EditPen, SwitchButton, Plus } from '@element-plus/icons-vue'
+import { EditPen, SwitchButton, Plus,Management, Comment, UploadFilled } from '@element-plus/icons-vue'
 import { getUserById, updateProfile, changePassword } from '@/api/user'
 import axios from 'axios'
 
@@ -142,9 +142,18 @@ watch(dialogVisible, val => {
               </el-menu-item>
             </template>
             <template v-if="userType === 2">
-              <el-menu-item index="/teacher">教师首页</el-menu-item>
-              <el-menu-item index="/teacher/question">学生提问</el-menu-item>
-              <el-menu-item index="/teacher/resource">资源管理</el-menu-item>
+              <el-menu-item index="/teacher">
+                <el-icon><Management /></el-icon>
+                <span>教师工作台</span>
+              </el-menu-item>
+              <el-menu-item index="/teacher/qa">
+                <el-icon><Comment /></el-icon>
+                <span>答疑中心</span>
+              </el-menu-item>
+              <el-menu-item index="/teacher/publish">
+                <el-icon><UploadFilled /></el-icon>
+                <span>资源发布</span>
+              </el-menu-item>
             </template>
             <template v-if="userType === 3">
               <el-menu-item index="/student">学生首页</el-menu-item>
