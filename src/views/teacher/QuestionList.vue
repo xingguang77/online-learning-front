@@ -26,21 +26,25 @@
       <el-table-column prop="title" label="问题标题" min-width="150" />
       <el-table-column prop="content" label="问题详情" min-width="200" show-overflow-tooltip />
       
-      <el-table-column label="问题附件" width="160">
+      <el-table-column label="问题附件" width="180">
         <template #default="scope">
-          <div v-if="scope.row.fileUrls && scope.row.fileUrls.length > 0" class="file-list-preview">
-            <div v-for="(url, index) in scope.row.fileUrls" :key="index" class="file-item">
-              <el-image 
-                v-if="isImage(url)" 
-                style="width: 40px; height: 40px; margin-right: 5px; border-radius: 4px;"
-                :src="url" 
-                :preview-src-list="[url]" 
-                preview-teleported
-                fit="cover"
-              />
-              <el-link v-else :href="url" target="_blank" type="primary" :underline="false">
-                <el-icon><Document /></el-icon>附件{{index+1}}
-              </el-link>
+          <div v-if="scope.row.fileUrls && scope.row.fileUrls.length > 0">
+            <div v-for="(url, index) in scope.row.fileUrls" :key="index" style="margin-bottom: 5px;">
+              <template v-if="isImage(url)">
+                <el-image 
+                  :src="url" 
+                  :preview-src-list="scope.row.fileUrls" 
+                  :initial-index="index"
+                  style="width: 40px; height: 40px; border-radius: 4px; border: 1px solid #eee; cursor: pointer;" 
+                  preview-teleported
+                  fit="cover"
+                />
+              </template>
+              <template v-else>
+                <el-button type="primary" link @click="downloadFile(url)" style="padding: 0; height: auto;">
+                  <el-icon><Document /></el-icon> {{ getFileName(url) }}
+                </el-button>
+              </template>
             </div>
           </div>
           <span v-else style="color: #909399;">无</span>
@@ -96,18 +100,28 @@
         
         <div v-if="replyForm.fileUrls && replyForm.fileUrls.length" style="margin-top: 15px;">
            <p><strong>回答附件：</strong></p>
-           <div class="file-list-preview">
-             <div v-for="(url, index) in replyForm.fileUrls" :key="index" class="file-item-lg">
-                <el-image 
-                  v-if="isImage(url)" 
-                  :src="url" 
-                  :preview-src-list="[url]" 
-                  fit="contain"
-                  style="max-width: 100px; max-height: 100px; border: 1px solid #eee;"
-                />
-                <el-link v-else :href="url" target="_blank" type="primary">
-                  <el-icon><Download /></el-icon> 点击下载附件 {{ index + 1 }}
-                </el-link>
+           <div class="custom-file-list">
+             <div v-for="(url, index) in replyForm.fileUrls" :key="index" class="custom-file-item">
+                <div v-if="isImage(url)" class="img-wrapper no-border">
+                  <el-image 
+                    :src="url" 
+                    :preview-src-list="replyForm.fileUrls"
+                    :initial-index="index"
+                    fit="cover"
+                    class="upload-thumb"
+                  />
+                </div>
+                <div v-else class="file-wrapper">
+                  <div class="file-info">
+                    <el-icon><Document /></el-icon>
+                    <span class="fname" :title="getFileName(url)">{{ getFileName(url) }}</span>
+                  </div>
+                  <div class="file-actions">
+                    <el-button link type="primary" @click="downloadFile(url)">
+                      <el-icon><Download /></el-icon>
+                    </el-button>
+                  </div>
+                </div>
              </div>
            </div>
         </div>
@@ -127,15 +141,47 @@
           <el-upload
             action="/api/upload"
             :headers="headers"
-            :file-list="fileList"
+            :show-file-list="false"
             :on-success="handleUploadSuccess"
-            :on-remove="handleRemove"
-            :on-preview="handlePreview" 
-            list-type="picture-card">
-            <el-icon><Plus /></el-icon>
+          >
+            <el-button size="small" type="primary" icon="Plus">点击上传</el-button>
           </el-upload>
-          <div style="font-size: 12px; color: #999; line-height: 1.5; margin-top: 5px;">
-            支持图片预览；非图片文件点击列表可下载。
+
+          <div class="custom-file-list" v-if="replyForm.fileUrls && replyForm.fileUrls.length > 0">
+            <div v-for="(url, index) in replyForm.fileUrls" :key="index" class="custom-file-item">
+              
+              <div v-if="isImage(url)" class="img-wrapper">
+                <el-image 
+                  :src="url" 
+                  :preview-src-list="replyForm.fileUrls"
+                  :initial-index="index"
+                  fit="cover"
+                  class="upload-thumb"
+                />
+                <div class="img-remove" @click="removeFile(index)">
+                  <el-icon><CircleCloseFilled /></el-icon>
+                </div>
+              </div>
+
+              <div v-else class="file-wrapper">
+                <div class="file-info">
+                  <el-icon><Document /></el-icon>
+                  <span class="fname" :title="getFileName(url)">{{ getFileName(url) }}</span>
+                </div>
+                <div class="file-actions">
+                  <el-button link type="primary" @click="downloadFile(url)">
+                    <el-icon><Download /></el-icon>
+                  </el-button>
+                  <el-button link type="danger" @click="removeFile(index)">
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          <div style="font-size: 12px; color: #999; line-height: 1.5; margin-top: 5px; width: 100%;">
+            支持图片预览；非图片文件点击下载按钮。
           </div>
         </el-form-item>
       </el-form>
@@ -153,7 +199,8 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import teacherApi from '@/api/teacher'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Document, Download } from '@element-plus/icons-vue'
+// 引入完整图标
+import { Plus, Document, Download, Delete, CircleCloseFilled } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const headers = { token: localStorage.getItem('token') || '' }
@@ -167,11 +214,10 @@ const submitting = ref(false)
 
 // 弹窗状态
 const dialogVisible = ref(false)
-const isEdit = ref(false) // 是否修改
-const isViewMode = ref(false) // 是否只读查看
+const isEdit = ref(false)
+const isViewMode = ref(false)
 const currentQuestionTitle = ref('')
-const currentQuestionContent = ref('') // 增加详情回显
-const fileList = ref([])
+const currentQuestionContent = ref('') 
 
 const replyForm = reactive({
   questionId: null,
@@ -180,7 +226,6 @@ const replyForm = reactive({
   fileUrls: []
 })
 
-// 计算弹窗标题
 const dialogTitle = computed(() => {
   if (isViewMode.value) return '回答详情'
   return isEdit.value ? '修改回答' : '回答问题'
@@ -211,26 +256,33 @@ const fetchQuestions = async () => {
   }
 }
 
-// === 工具方法：判断是否图片 ===
+// === 工具方法 ===
 const isImage = (url) => {
   if (!url) return false
-  return /\.(jpeg|jpg|png|gif|bmp|webp)$/i.test(url)
+  const ext = url.substring(url.lastIndexOf('.')).toLowerCase()
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']
+  return imageExtensions.includes(ext)
 }
 
-// === 处理上传组件预览点击 ===
-const handlePreview = (uploadFile) => {
-  // 获取真实URL (上传成功后的 response.data 或者 回显时的 url)
-  const url = uploadFile.url || (uploadFile.response && uploadFile.response.data)
+const getFileName = (url) => {
+  if (!url) return '未知文件'
+  let fileName = url.substring(url.lastIndexOf('/') + 1)
+  fileName = fileName.split('?')[0]
+  try { return decodeURIComponent(fileName) } catch (e) { return fileName }
+}
+
+const downloadFile = (url) => {
   if (!url) return
-  
-  // 如果是图片，Element Plus 的 list-type="picture-card" 已经自带预览
-  // 但如果是 PDF/Word 等，我们需要手动打开
-  if (!isImage(url)) {
-    window.open(url, '_blank')
-  }
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', getFileName(url))
+  link.target = '_blank'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
-// 1. 去回答
+// === 操作逻辑 ===
 const openReplyDialog = (row) => {
   isEdit.value = false
   isViewMode.value = false
@@ -241,11 +293,9 @@ const openReplyDialog = (row) => {
   replyForm.answerId = null
   replyForm.content = ''
   replyForm.fileUrls = []
-  fileList.value = []
   dialogVisible.value = true
 }
 
-// 2. 修改回答 (需加载数据)
 const openEditDialog = async (row) => {
   isEdit.value = true
   isViewMode.value = false
@@ -253,7 +303,6 @@ const openEditDialog = async (row) => {
   dialogVisible.value = true
 }
 
-// 3. 查看详情 (需加载数据)
 const openDetailDialog = async (row) => {
   isEdit.value = false
   isViewMode.value = true
@@ -261,7 +310,6 @@ const openDetailDialog = async (row) => {
   dialogVisible.value = true
 }
 
-// 复用：加载回答数据
 const loadAnswerData = async (row) => {
   currentQuestionTitle.value = row.title
   currentQuestionContent.value = row.content
@@ -273,12 +321,6 @@ const loadAnswerData = async (row) => {
     replyForm.answerId = answer.id
     replyForm.content = answer.content || ''
     replyForm.fileUrls = answer.fileUrls || []
-    
-    // 初始化上传列表（用于编辑回显）
-    fileList.value = replyForm.fileUrls.map((url, index) => ({
-      name: `附件${index+1}`,
-      url: url
-    }))
   } else {
     ElMessage.error('获取回答详情失败')
   }
@@ -290,9 +332,9 @@ const handleUploadSuccess = (response) => {
   else ElMessage.error('上传失败')
 }
 
-const handleRemove = (uploadFile) => {
-  const urlToRemove = uploadFile.response ? uploadFile.response.data : uploadFile.url
-  replyForm.fileUrls = replyForm.fileUrls.filter(url => url !== urlToRemove)
+// 移除文件
+const removeFile = (index) => {
+  replyForm.fileUrls.splice(index, 1)
 }
 
 const submitReply = async () => {
@@ -303,8 +345,8 @@ const submitReply = async () => {
   submitting.value = true
   try {
     const payload = {
-      questionId: replyForm.questionId, // 只有新增需要，修改不需要但传了也无妨
-      id: isEdit.value ? replyForm.answerId : undefined, // 修改需要 ID
+      questionId: replyForm.questionId, 
+      id: isEdit.value ? replyForm.answerId : undefined,
       content: replyForm.content,
       fileUrls: replyForm.fileUrls
     }
@@ -328,17 +370,11 @@ const submitReply = async () => {
 const handleDelete = (row) => {
   ElMessageBox.confirm('确定删除该回答吗？', '提示', { type: 'warning' })
     .then(async () => {
-       // 注意：由于我们之前改了 QuestionDTO 不带 answerId，
-       // 这里如果 row.answerId 为空，删除会失败。
-       // 严谨的做法是：先 getAnswer 拿到 ID 再删除，或者让后端 QuestionDTO 带上 answerId
-       // 这里假设您已经修复了 handleAnswerId 的问题，或者先调用查询
        let aid = row.answerId
        if (!aid) {
-         // 兜底：先查一下 ID
          const res = await teacherApi.getAnswer(row.id)
          if(res.code === 1 && res.data) aid = res.data.id
        }
-       
        if(aid) {
          await teacherApi.deleteAnswer(aid)
          ElMessage.success('已删除')
@@ -367,17 +403,81 @@ const handleDelete = (row) => {
   color: #333;
   margin-top: 5px;
 }
-.file-list-preview {
-  display: flex; 
-  flex-wrap: wrap; 
+
+/* 复用自定义样式 */
+.custom-file-list {
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+  margin-top: 10px;
 }
-.file-item {
-  display: flex; 
+
+.img-wrapper {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 4px;
+  border: 1px solid #dcdfe6;
+}
+.img-wrapper.no-border {
+  border: none;
+  overflow: hidden;
+}
+
+.upload-thumb {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.img-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  color: #f56c6c;
+  background: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.img-remove:hover {
+  transform: scale(1.1);
+}
+
+.file-wrapper {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 300px;
+  padding: 6px 10px;
+  background-color: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
 }
-.file-item-lg {
-  margin-right: 15px;
-  margin-bottom: 10px;
+
+.file-info {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  margin-right: 10px;
+}
+
+.fname {
+  font-size: 12px;
+  margin-left: 6px;
+  color: #606266;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 </style>
