@@ -1,15 +1,5 @@
 <template>
   <div class="app-container">
-    <el-alert
-      v-if="unreadCount > 0"
-      :title="`您有 ${unreadCount} 条新回答，点击查看消息中心`"
-      type="warning"
-      effect="dark"
-      show-icon
-      class="notification-alert"
-      @click="$router.push('/student/center?tab=qa')"
-    />
-
     <h2 class="page-title">我的课程班级</h2>
     
     <div v-loading="loading">
@@ -39,31 +29,30 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import studentCourseApi from '@/api/studentCourse'
+// 注意：删除了 ElMessageBox 的引入
 
 const router = useRouter()
 const loading = ref(false)
 const classList = ref([])
-const unreadCount = ref(0)
 
 onMounted(async () => {
   loading.value = true
   try {
-    // 1. 获取课程列表
+    // 1. 只保留获取课程列表的逻辑
     const res = await studentCourseApi.getMyClasses()
     if(res.code === 1) {
       classList.value = res.data
     }
-    // 2. 获取通知数
-    const nRes = await studentCourseApi.getUnreadCount()
-    if(nRes.code === 1) unreadCount.value = nRes.data
+    
+    // 【已删除】原有的 notification 检查和 ElMessageBox.confirm 逻辑
+    // 因为这部分功能已经移动到了 src/views/layout/index.vue 中全局处理
+    
   } finally {
     loading.value = false
   }
 })
 
 const handleEnterCourse = (item) => {
-  // 跳转到详情页，带上 classId 和 courseId
-  // query传参方便刷新后数据还在
   router.push({
     path: `/student/course/${item.id}`,
     query: { courseId: item.courseId, name: item.courseName }
@@ -72,7 +61,6 @@ const handleEnterCourse = (item) => {
 </script>
 
 <style scoped>
-.notification-alert { margin-bottom: 20px; cursor: pointer; }
 .page-title { margin-bottom: 20px; font-weight: 600; color: #303133; }
 .course-card { cursor: pointer; transition: transform 0.2s; border: none; overflow: hidden; }
 .course-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }

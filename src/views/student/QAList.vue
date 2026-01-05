@@ -8,7 +8,17 @@
             placeholder="搜标题/内容/回答/教师" 
             clearable 
             @keyup.enter="handleQuery"
-            style="width: 240px"
+            style="width: 240px" 
+          />
+        </el-form-item>
+
+        <el-form-item label="教师">
+          <el-input 
+            v-model="queryParams.teacherName" 
+            placeholder="搜负责教师" 
+            clearable 
+            @keyup.enter="handleQuery"
+            style="width: 140px" 
           />
         </el-form-item>
 
@@ -55,7 +65,11 @@
         </el-table-column>
         
         <el-table-column prop="courseName" label="所属课程" width="150" align="center" v-if="!props.courseId" />
-        <el-table-column prop="teacherName" label="负责教师" width="120" align="center" />
+        <el-table-column prop="teacherName" label="负责教师" width="120" align="center">
+          <template #default="scope">
+            {{ formatTeacherNames(scope.row.answers) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="createTime" label="提问时间" width="170" align="center" />
         <el-table-column label="状态" width="100" align="center">
           <template #default="scope">
@@ -110,12 +124,18 @@
           <el-upload
             action="/api/upload"
             :headers="headers"
-            :file-list="fileList"
+            v-model:file-list="fileList"
             :on-success="handleUploadSuccess"
             :on-remove="handleRemove"
             :on-preview="handlePreview"
-            list-type="picture-card">
-            <el-icon><Plus /></el-icon>
+          >
+            <el-button type="primary" icon="Upload">点击上传附件</el-button>
+            
+            <template #tip>
+              <div class="el-upload__tip">
+                支持图片、文档等格式，点击文件名可预览或下载
+              </div>
+            </template>
           </el-upload>
         </el-form-item>
       </el-form>
@@ -191,21 +211,22 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { useRoute } from 'vue-router' // 1. 引入路由钩子
+import { ref, reactive, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import qaApi from '@/api/qa'
 import studentCourseApi from '@/api/studentCourse'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Link, Document } from '@element-plus/icons-vue'
+// 【修复】引入 Upload 图标
+import { Plus, Edit, Link, Document, Upload } from '@element-plus/icons-vue'
 
-const route = useRoute() // 2. 获取路由实例
+const route = useRoute()
 const headers = { token: localStorage.getItem('token') || '' }
 
 const props = defineProps({
   courseId: { type: Number, default: null } 
 })
 
-// 数据定义
+// === 数据定义 ===
 const loading = ref(false)
 const tableData = ref([])
 const total = ref(0)
@@ -215,6 +236,7 @@ const queryParams = reactive({
   page: 1,
   pageSize: 10,
   keyword: '',
+  teacherName: '',
   courseId: null,
   status: null
 })
@@ -232,38 +254,65 @@ const currentDetail = ref(null)
 const previewVisible = ref(false)
 const previewUrl = ref('')
 
+// === 方法定义 (注意顺序：先定义被调用的函数) ===
+
+// 1. 打开详情弹窗
+const handleDetail = (row) => {
+  currentDetail.value = row
+  detailVisible.value = true
+}
+
+// 2. 根据ID检查并打开详情 (用于通知跳转)
+const checkAndOpenDetail = async (id) => {
+  if (!id) return
+  const targetId = Number(id)
+  
+  // 1. 尝试在当前列表找
+  const targetRow = tableData.value.find(q => q.id === targetId)
+  
+  if (targetRow) {
+    handleDetail(targetRow)
+  } else {
+    // 2. 列表里没找到，单独调接口查
+    try {
+      const res = await qaApi.getDetail(targetId)
+      if (res.code === 1) {
+        currentDetail.value = res.data
+        detailVisible.value = true
+      }
+    } catch(e) {
+      console.error('自动打开详情失败', e)
+    }
+  }
+}
+
+// === 生命周期与监听 ===
+
 onMounted(async () => {
+  // 1. 处理课程筛选参数
   if (props.courseId) {
     queryParams.courseId = props.courseId
   } else {
-    await loadCourseOptions() // 确保先加载完选项
+    await loadCourseOptions()
   }
   
-  await getList() // 先获取列表数据
+  // 2. 获取列表
+  await getList()
 
-  // 3. 【核心修复】检查路由是否有 id 参数，如果有，自动打开详情弹窗
+  // 3. 检查路由参数 (如果是从通知跳转进来的)
   if (route.query.id) {
-    const targetId = Number(route.query.id)
-    // 尝试在已加载的列表中查找该问题
-    const targetRow = tableData.value.find(q => q.id === targetId)
-    
-    if (targetRow) {
-      // 如果找到了，直接打开
-      handleDetail(targetRow)
-    } else {
-      // 如果没找到（可能在第2页，或者列表未包含），尝试单独调用详情接口
-      try {
-        const res = await qaApi.getDetail(targetId)
-        if (res.code === 1) {
-          currentDetail.value = res.data
-          detailVisible.value = true
-        }
-      } catch(e) {
-        console.error('自动打开详情失败', e)
-      }
-    }
+    checkAndOpenDetail(route.query.id)
   }
 })
+
+// 4. 监听路由变化 (解决在当前页面点击通知不刷新的问题)
+watch(() => route.query.id, (newId) => {
+  if (newId) {
+    checkAndOpenDetail(newId)
+  }
+})
+
+// === 业务逻辑函数 ===
 
 const loadCourseOptions = async () => {
   const res = await studentCourseApi.getMyClasses() 
@@ -298,6 +347,7 @@ const handleQuery = () => {
 
 const resetQuery = () => {
   queryParams.keyword = ''
+  queryParams.teacherName = ''
   queryParams.status = null
   if (!props.courseId) {
     queryParams.courseId = null
@@ -328,11 +378,16 @@ const submitAsk = async () => {
   getList()
 }
 
-const handleDetail = (row) => {
-  currentDetail.value = row
-  detailVisible.value = true
+// 格式化教师姓名
+const formatTeacherNames = (answers) => {
+  if (!answers || answers.length === 0) return '-'
+  const names = answers.map(item => item.teacherName).filter(name => name)
+  const uniqueNames = [...new Set(names)]
+  if (uniqueNames.length === 0) return '老师'
+  return uniqueNames.join('、')
 }
 
+// 附件上传相关
 const handleUploadSuccess = (res) => {
   if(res.code === 1) askForm.fileUrls.push(res.data)
 }
@@ -340,12 +395,18 @@ const handleRemove = (file) => {
   const url = file.response ? file.response.data : file.url
   askForm.fileUrls = askForm.fileUrls.filter(u => u !== url)
 }
-const handlePreview = (file) => {
-  previewUrl.value = file.url || (file.response && file.response.data)
-  previewVisible.value = true
+const handlePreview = (uploadFile) => {
+  const fileUrl = uploadFile.response ? uploadFile.response.data : uploadFile.url
+  if (!fileUrl) return
+  if (isImage(fileUrl)) {
+    previewUrl.value = fileUrl
+    previewVisible.value = true
+  } else {
+    downloadFile(fileUrl)
+  }
 }
 
-// === 工具函数 ===
+// 工具函数
 const isImage = (url) => {
   if (!url) return false
   const ext = url.substring(url.lastIndexOf('.')).toLowerCase()

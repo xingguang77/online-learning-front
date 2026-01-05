@@ -27,17 +27,40 @@ const notifList = ref([])
 const timer = ref(null)
 
 // 初始化用户信息
-onMounted(() => {
+onMounted(async () => { // 1. 改为 async
   const loginUser = JSON.parse(localStorage.getItem('loginUser'))
   if (loginUser) {
     loginName.value = loginUser.name
     userType.value = loginUser.userType
     id.value = loginUser.id
     
-    // 如果是学生，开启通知轮询
+    // 如果是学生，开启通知检测
     if (userType.value === 3) {
-      fetchUnreadCount()
-      // 每30秒轮询一次未读数
+      // 2. 先等待获取未读数
+      await fetchUnreadCount()
+      
+      // 3. 【核心新增】如果存在未读消息，弹出橙色居中提示框
+      if (unreadCount.value > 0) {
+        ElMessageBox.confirm(
+          `您有 ${unreadCount.value} 条未读消息，建议立即查看。`,
+          '新消息通知',
+          {
+            confirmButtonText: '立即查看',
+            cancelButtonText: '稍后再说',
+            type: 'warning',    // 橙色图标
+            center: true,       // 居中布局
+            draggable: true,    // 可拖拽
+            closeOnClickModal: false
+          }
+        ).then(() => {
+          // 4. 点击“立即查看”，直接打开消息中心弹窗
+          openNotifications()
+        }).catch(() => {
+          // 点击取消，不做操作
+        })
+      }
+
+      // 开启轮询（每30秒更新一次数字，但不重复弹窗）
       timer.value = setInterval(fetchUnreadCount, 30000)
     }
   }
@@ -59,6 +82,7 @@ const fetchUnreadCount = async () => {
   }
 }
 
+// 打开消息中心弹窗
 const openNotifications = async () => {
   notifVisible.value = true
   // 获取列表
@@ -159,7 +183,7 @@ const handleAvatarSuccess = (response) => {
 }
 
 
-// 2. 【新增】处理查看点击
+// 处理查看点击
 const handleViewDetail = (item) => {
   // 如果有关联ID，跳转到问答广场并带上ID参数
   if (item.relatedId) {
